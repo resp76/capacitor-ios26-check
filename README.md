@@ -18,6 +18,8 @@ Each check prints PASS, FAIL, or WARN. JSON output is an array of `{ check, stat
 
 Static webDir strings in root `capacitor.config.ts`, `.js`, `.mjs`, `.cjs`, or `.json` are supported, in that order. Computed JavaScript values are not executed; the native config webDir or `www` is used as a fallback. Missing entry points are reported as a non-applicable PASS. These lightweight text checks do not validate Xcode membership, runtime behavior, or full asset parity.
 
+**Fixing a UIScene failure:** Capacitor 8.5 and later adopt UIScene officially. `npx cap migrate` adds the scene manifest and `SceneDelegate.swift` for you; see the [8.5 update guide](https://capacitorjs.com/docs/updating/8-5). Use this checker to confirm the result, or to audit a project you cannot upgrade yet.
+
 See [the fix guide](docs/FIX-GUIDE.md) for scene setup, sync wrappers, and Git staging. [SKILL.md](SKILL.md) provides a Claude workflow.
 
 ```sh
