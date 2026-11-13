@@ -1,11 +1,40 @@
 {
   "name": "capacitor-ios26-check",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Audit Capacitor iOS projects for iOS 26 scene and sync traps",
   "type": "module",
-  "bin": { "capacitor-ios26-check": "bin/cli.mjs" },
-  "scripts": { "test": "node --test" },
-  "engines": { "node": ">=18" },
+  "bin": {
+    "capacitor-ios26-check": "bin/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "MIT",
-  "files": ["bin", "src", "docs", "SKILL.md", "README.md", "LICENSE"]
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/resp76/capacitor-ios26-check.git"
+  },
+  "homepage": "https://github.com/resp76/capacitor-ios26-check#readme",
+  "bugs": {
+    "url": "https://github.com/resp76/capacitor-ios26-check/issues"
+  },
+  "keywords": [
+    "capacitor",
+    "ios",
+    "ios26",
+    "uiscene",
+    "cli",
+    "claude-code"
+  ]
 }
