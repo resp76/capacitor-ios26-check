@@ -4,7 +4,18 @@ Run `npx capacitor-ios26-check .` from the Capacitor project root. The audit is 
 
 ## UIScene life cycle
 
-Apps built with the iOS 26 SDK can crash at launch with “UIScene life cycle is required” when the scene setup is missing. Add the following inside the top-level `<dict>` in `ios/App/App/Info.plist`:
+Apps built with the iOS 26 SDK or later can fail to launch with “UIScene life cycle is required” when the scene setup is missing.
+
+**On Capacitor 8.5 or later, use the official migration.** Update the CLI first, then migrate; `cap migrate` runs the migrator of the CLI installed when it starts, so an older CLI skips the UIScene step without saying so:
+
+```sh
+npm i -D @capacitor/cli@latest
+npx cap migrate
+```
+
+A successful run prints `Writing SceneDelegate.swift`. See the [8.5 update guide](https://capacitorjs.com/docs/updating/8-5). If your app sets a `CAPBridgeViewController` subclass in `Main.storyboard`, also read [App-target plugin registration](#app-target-plugin-registration) below.
+
+**Manual route, only for projects that stay on Capacitor 8.4 or earlier.** After this route, a later `cap migrate` reports a “partial state” and skips its UIScene step; follow the 8.5 guide's manual steps at that point. Add the following inside the top-level `<dict>` in `ios/App/App/Info.plist`:
 
 ```xml
 <key>UIApplicationSceneManifest</key>
@@ -67,42 +78,37 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 }
 ```
 
-Keep existing AppDelegate URL and Universal Link forwarding for application-level callbacks. Build and launch on a device or simulator, then test cold and warm deep links; this text audit cannot validate Xcode target membership or runtime behavior.
+Keep existing AppDelegate URL and Universal Link forwarding for application-level callbacks. Build and launch on a device or simulator, then test cold and warm deep links. This text audit cannot validate the `UISceneDelegateClassName` value, Xcode target membership or runtime behavior: a misspelled class name or a `SceneDelegate.swift` outside the App target gives a black screen, not a crash.
 
 ## App-target plugin registration
 
-`cap sync` rebuilds `ios/App/App/capacitor.config.json` → `packageClassList` from node_modules. Plugins compiled directly into the App target disappear from that list and their JS object becomes undefined. Restore them after **every** sync.
+Plugins compiled into the App target are not in node_modules, so `cap sync` never lists them in `ios/App/App/capacitor.config.json` → `packageClassList`, and removes any entry you add by hand. Register them in code instead, as the [Capacitor custom code guide](https://capacitorjs.com/docs/ios/custom-code) documents: subclass `CAPBridgeViewController` and register each plugin in `capacitorDidLoad()`.
 
-Create `tools/register-ios-app-plugins.mjs` in your project (replace `LocalPlugin` with your Swift plugin class names):
+```swift
+import UIKit
+import Capacitor
 
-```js
-import { readFileSync, writeFileSync } from 'node:fs';
-
-const classes = ['LocalPlugin'];
-const file = new URL('../ios/App/App/capacitor.config.json', import.meta.url);
-const config = JSON.parse(readFileSync(file, 'utf8'));
-const registered = config.packageClassList ?? [];
-const missing = classes.filter(name => !registered.includes(name));
-if (missing.length) {
-  config.packageClassList = [...registered, ...missing];
-  writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
+class MyViewController: CAPBridgeViewController {
+    override open func capacitorDidLoad() {
+        bridge?.registerPluginInstance(LocalPlugin())
+    }
 }
 ```
 
-Wire the script after sync in your project's package.json:
+The subclass only runs if it is the root view controller:
 
-```json
-{
-  "scripts": {
-    "ios:sync": "npx cap sync ios && node tools/register-ios-app-plugins.mjs",
-    "cap:sync": "npx cap sync && node tools/register-ios-app-plugins.mjs"
-  }
-}
+- **Storyboard (Capacitor 8.4 and earlier, or the manual UIScene route above):** set the bridge view controller's custom class in `Main.storyboard` to `MyViewController`, module `App`.
+- **After `cap migrate` to 8.5 or later:** the generated `SceneDelegate.swift` creates a plain `CAPBridgeViewController()` and ignores the storyboard class, so the plugin's JS object becomes undefined. `cap migrate` does not warn about this. Change that line to create your subclass:
+
+```swift
+window?.rootViewController = MyViewController()
 ```
+
+This survives `cap sync`. Then check from JS, on a device or simulator, that each app-local plugin answers.
 
 ## Stale native web bundle
 
-Build the web app into the configured `webDir` (default `www`), then run the sync wrapper above. The checker compares source and native `index.html` contents. Matching entry points do not prove all assets match: for release verification, also compare all relative file paths and bytes, allowing only generated `cordova.js` and `cordova_plugins.js` extras in the native bundle.
+Build the web app into the configured `webDir` (default `www`), then run `npx cap sync ios`. The checker compares source and native `index.html` contents. Matching entry points do not prove all assets match: for release verification, also compare all relative file paths and bytes, allowing only generated `cordova.js` and `cordova_plugins.js` extras in the native bundle.
 
 ## Gitignored native bundle with tracked files
 

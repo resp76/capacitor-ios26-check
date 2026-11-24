@@ -56,7 +56,42 @@ test('missing app-target plugin registration fails', async t => {
   await put('ios/App/App/capacitor.config.json', '{"packageClassList":[]}');
   const row = result(await checkProject(root), 'plugins');
   assert.equal(row.status, 'FAIL');
-  assert.match(row.message, /LocalPlugin.*cap sync.*undefined/);
+  assert.match(row.message, /No registration for LocalPlugin.*registerPluginInstance/);
+});
+
+const controller = 'class MyViewController: CAPBridgeViewController {\n  override open func capacitorDidLoad() { bridge?.registerPluginInstance(LocalPlugin()) }\n}';
+const migratedScene = name => `class SceneDelegate: UIResponder, UIWindowSceneDelegate {\n  func scene() { window?.rootViewController = ${name}() }\n}`;
+
+test('plugin registered in a storyboard bridge subclass passes', async t => {
+  const { root, put } = await fixture(t);
+  await put('ios/App/App/capacitor.config.json', '{"packageClassList":[]}');
+  await put('ios/App/App/MyViewController.swift', controller);
+  assert.equal(result(await checkProject(root), 'plugins').status, 'PASS');
+});
+
+test('registerPluginType counts as registration', async t => {
+  const { root, put } = await fixture(t);
+  await put('ios/App/App/capacitor.config.json', '{"packageClassList":[]}');
+  await put('ios/App/App/MyViewController.swift', controller.replace('registerPluginInstance(LocalPlugin())', 'registerPluginType(LocalPlugin.self)'));
+  assert.equal(result(await checkProject(root), 'plugins').status, 'PASS');
+});
+
+test('subclass registration fails when the scene delegate creates a plain bridge', async t => {
+  const { root, put } = await fixture(t);
+  await put('ios/App/App/capacitor.config.json', '{"packageClassList":[]}');
+  await put('ios/App/App/MyViewController.swift', controller);
+  await put('ios/App/App/AppDelegate.swift', migratedScene('CAPBridgeViewController'));
+  const row = result(await checkProject(root), 'plugins');
+  assert.equal(row.status, 'FAIL');
+  assert.match(row.message, /never created: LocalPlugin \(MyViewController\)/);
+});
+
+test('subclass registration passes when the scene delegate creates the subclass', async t => {
+  const { root, put } = await fixture(t);
+  await put('ios/App/App/capacitor.config.json', '{"packageClassList":[]}');
+  await put('ios/App/App/MyViewController.swift', controller);
+  await put('ios/App/App/AppDelegate.swift', migratedScene('MyViewController'));
+  assert.equal(result(await checkProject(root), 'plugins').status, 'PASS');
 });
 
 test('malformed native config fails cleanly', async t => {

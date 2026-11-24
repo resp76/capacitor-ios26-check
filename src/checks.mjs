@@ -30,10 +30,30 @@ export async function checkProject(directory = '.') {
   catch { add('plugins', 'FAIL', 'Invalid ios/App/App/capacitor.config.json'); }
   const plugins = [...new Set(sources.flatMap(source => [...source.matchAll(/\bclass\s+(\w+)\s*:\s*(?:Capacitor\.)?CAPPlugin\b/g)].map(match => match[1])))];
   const registered = Array.isArray(nativeConfig?.packageClassList) ? nativeConfig.packageClassList : [];
-  const missing = plugins.filter(name => !registered.includes(name));
+  // Documented route: bridge?.registerPluginInstance(X()) / registerPluginType(X.self) in a
+  // CAPBridgeViewController subclass. That subclass only runs if it is the root view controller.
+  const registeredBy = new Map();
+  for (const source of sources) {
+    const controllers = [...source.matchAll(/\bclass\s+(\w+)\s*:\s*(?:Capacitor\.)?CAPBridgeViewController\b/g)].map(match => match[1]);
+    for (const match of source.matchAll(/\bregisterPlugin(?:Instance\(\s*(\w+)\s*\(|Type\(\s*(\w+)\.self\b)/g)) {
+      registeredBy.set(match[1] ?? match[2], controllers);
+    }
+  }
+  const plainRoot = sources.some(source => /\brootViewController\s*=\s*(?:Capacitor\.)?CAPBridgeViewController\s*\(/.test(source));
+  const created = name => sources.some(source => new RegExp(`\\b${name}\\s*\\(`).test(source));
+  const unused = [];
+  const missing = [];
+  for (const name of plugins) {
+    if (registered.includes(name)) continue;
+    const controllers = registeredBy.get(name);
+    if (!controllers) missing.push(name);
+    else if (controllers.length && plainRoot && !controllers.some(created)) unused.push(`${name} (${controllers.join(', ')})`);
+  }
   if (!results.some(result => result.check === 'plugins')) {
-    add('plugins', missing.length ? 'FAIL' : 'PASS', missing.length
-      ? `Missing packageClassList entries: ${missing.join(', ')}; cap sync regenerates packageClassList from node_modules and drops app-target plugins; JS object becomes undefined. Re-add after every sync.`
+    const problems = [];
+    if (missing.length) problems.push(`No registration for ${missing.join(', ')}; JS object will be undefined. Call bridge?.registerPluginInstance(...) in capacitorDidLoad() of a CAPBridgeViewController subclass (packageClassList entries are removed by cap sync).`);
+    if (unused.length) problems.push(`Registered in a view controller that is never created: ${unused.join(', ')}. The scene delegate sets rootViewController = CAPBridgeViewController(); create the subclass there instead.`);
+    add('plugins', problems.length ? 'FAIL' : 'PASS', problems.length ? problems.join(' ')
       : 'All app-target CAPPlugin classes are registered');
   }
 
